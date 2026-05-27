@@ -45,9 +45,10 @@ jobs:
           retention-days: 7
 
   # =========================
-  # 2. Sécurité (SAST + audit deps)
+  # 2. Sécurité (audit deps + scan image)
   # =========================
   security:
+    name: Security checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -56,7 +57,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
 
       - name: Install dependencies
@@ -70,7 +71,8 @@ jobs:
 
       - name: Install Trivy
         run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.70.0
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b /usr/local/bin v0.70.0
 
       - name: Run Trivy scan
         run: |
@@ -78,6 +80,7 @@ jobs:
             --severity HIGH,CRITICAL \
             --format table \
             --exit-code 0
+
   # =========================
   # 3. Build & push Docker
   # =========================
@@ -91,22 +94,27 @@ jobs:
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build image (no push for student version)
+      - name: Build image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: false
-          tags: helpdesk:${{ github.sha }}
+          load: true # charge l'image dans le daemon Docker local
+          tags: helpdesk:scan
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Scan de l'image Docker
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b /usr/local/bin v0.70.0
+
       - name: Scan Docker image with Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: "helpdesk:${{ github.sha }}"
-          severity: "CRITICAL,HIGH"
-          exit-code: "0"
+        run: |
+          trivy image helpdesk:scan \
+            --severity HIGH,CRITICAL \
+            --format table \
+            --exit-code 0
 
   # =========================
   # 4. Deploy Azure (main uniquement)
@@ -135,7 +143,8 @@ jobs:
       - name: Build & push to ACR
         run: |
           docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/helpdesk:${{ github.sha }} .
-          docker tag ${{ secrets.ACR_LOGIN_SERVER }}/helpdesk:${{ github.sha }} ${{ secrets.ACR_LOGIN_SERVER }}/helpdesk:latest
+          docker tag ${{ secrets.ACR_LOGIN_SERVER }}/helpdesk:${{ github.sha }} \
+                     ${{ secrets.ACR_LOGIN_SERVER }}/helpdesk:latest
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/helpdesk:${{ github.sha }}
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/helpdesk:latest
 
