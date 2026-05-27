@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: "20"
 
 jobs:
   # =========================
@@ -23,7 +23,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -57,7 +57,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
 
       - name: Install
         run: npm ci
@@ -66,14 +66,16 @@ jobs:
         run: npm audit --audit-level=high
         continue-on-error: true
 
-      - name: Run Trivy (filesystem scan)
+      - name: Build Docker image for scanning
+        run: docker build -t helpdesk:scan .
+
+      - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          severity: 'CRITICAL,HIGH'
-          format: 'table'
-          exit-code: '0'
-
+          image-ref: helpdesk:scan
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: "0"
   # =========================
   # 3. Build & push Docker
   # =========================
@@ -100,9 +102,9 @@ jobs:
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'helpdesk:${{ github.sha }}'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '0'
+          image-ref: "helpdesk:${{ github.sha }}"
+          severity: "CRITICAL,HIGH"
+          exit-code: "0"
 
   # =========================
   # 4. Deploy Azure (main uniquement)
