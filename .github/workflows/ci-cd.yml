@@ -48,34 +48,36 @@ jobs:
   # 2. Sécurité (SAST + audit deps)
   # =========================
   security:
-    name: Security checks
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+  runs-on: ubuntu-latest
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "npm"
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+        cache: "npm"
 
-      - name: Install
-        run: npm ci
+    - name: Install dependencies
+      run: npm ci
 
-      - name: npm audit (vulnérabilités dans les dépendances)
-        run: npm audit --audit-level=high
-        continue-on-error: true
+    - name: Run npm audit
+      run: npm audit --audit-level=high || true
 
-      - name: Build Docker image for scanning
-        run: docker build -t helpdesk:scan .
+    - name: Build Docker image for scanning
+      run: docker build -t helpdesk:scan .
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: helpdesk:scan
-          format: table
-          severity: HIGH,CRITICAL
-          exit-code: "0"
+    - name: Install Trivy
+      run: |
+        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.70.0
+
+    - name: Run Trivy scan
+      run: |
+        trivy image helpdesk:scan \
+          --severity HIGH,CRITICAL \
+          --format table \
+          --exit-code 0
   # =========================
   # 3. Build & push Docker
   # =========================
